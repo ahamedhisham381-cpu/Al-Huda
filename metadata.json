@@ -1,0 +1,10 @@
+{
+  "name": "Al-Huda",
+  "description": "A premium Islamic companion for prayer times, spiritual wisdom, digital Dhikr, and Holy Quran.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
