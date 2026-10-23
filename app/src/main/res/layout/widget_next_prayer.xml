@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_city"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Al-Huda"
+            android:textColor="#94A3B8"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/widget_hijri"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#64748B"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_next_prayer_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="Next: Fajr"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_next_prayer_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="--:--"
+        android:textColor="#10B981"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:id="@+id/widget_prayer_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal"
+        android:weightSum="5">
+
+        <LinearLayout android:id="@+id/widget_slot_fajr" style="@style/WidgetPrayerSlot">
+            <TextView android:id="@+id/widget_label_fajr" style="@style/WidgetPrayerLabel" android:text="Fajr" />
+            <TextView android:id="@+id/widget_time_fajr" style="@style/WidgetPrayerTime" android:text="--:--" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/widget_slot_dhuhr" style="@style/WidgetPrayerSlot">
+            <TextView android:id="@+id/widget_label_dhuhr" style="@style/WidgetPrayerLabel" android:text="Dhuhr" />
+            <TextView android:id="@+id/widget_time_dhuhr" style="@style/WidgetPrayerTime" android:text="--:--" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/widget_slot_asr" style="@style/WidgetPrayerSlot">
+            <TextView android:id="@+id/widget_label_asr" style="@style/WidgetPrayerLabel" android:text="Asr" />
+            <TextView android:id="@+id/widget_time_asr" style="@style/WidgetPrayerTime" android:text="--:--" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/widget_slot_maghrib" style="@style/WidgetPrayerSlot">
+            <TextView android:id="@+id/widget_label_maghrib" style="@style/WidgetPrayerLabel" android:text="Maghrib" />
+            <TextView android:id="@+id/widget_time_maghrib" style="@style/WidgetPrayerTime" android:text="--:--" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/widget_slot_isha" style="@style/WidgetPrayerSlot">
+            <TextView android:id="@+id/widget_label_isha" style="@style/WidgetPrayerLabel" android:text="Isha" />
+            <TextView android:id="@+id/widget_time_isha" style="@style/WidgetPrayerTime" android:text="--:--" />
+        </LinearLayout>
+
+    </LinearLayout>
+</LinearLayout>

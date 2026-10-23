@@ -51,11 +51,14 @@ fun HomeScreen(
     val lat by viewModel.settingsManager.latitude.collectAsState()
     val lng by viewModel.settingsManager.longitude.collectAsState()
     val lang by viewModel.settingsManager.lang.collectAsState()
+    val isAr = lang == "ar"
+    val isOfflineMode by viewModel.isOfflineMode.collectAsState()
     val accentId by viewModel.settingsManager.accent.collectAsState()
     val accentColor = getAccentColor(accentId)
     val t = Translations.get(lang)
 
     var searchQuery by remember { mutableStateOf("") }
+    val citySuggestions by viewModel.citySuggestions.collectAsState()
     val isFriday = remember { viewModel.isTodayFriday() }
 
     val prayerList = remember(prayerTimes, nextPrayer, completedPrayers, isFriday, lang) {
@@ -118,6 +121,35 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .testTag("city_search_input")
             )
+        }
+
+        // City search results (online search, offline fallback to built-in cities)
+        if (citySuggestions.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(GlassWhite10)
+                        .testTag("city_suggestions")
+                ) {
+                    citySuggestions.forEach { place ->
+                        Text(
+                            text = place.name,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    searchQuery = ""
+                                    viewModel.selectCity(place)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        )
+                    }
+                }
+            }
         }
 
         // Section Title, Hijri date and export actions
@@ -195,6 +227,22 @@ fun HomeScreen(
                         fontSize = 11.sp,
                         color = TextSubtle
                     )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(if (isOfflineMode) Color(0xFFF59E0B) else Color(0xFF10B981), CircleShape)
+                        )
+                        Text(
+                            text = if (isOfflineMode) {
+                                if (isAr) "تقدير محلي (دون اتصال)" else "Offline estimate"
+                            } else {
+                                if (isAr) "مباشر عبر Aladhan.com" else "Live via Aladhan.com"
+                            },
+                            fontSize = 10.sp,
+                            color = TextSubtle
+                        )
+                    }
                 }
             }
         }
@@ -360,6 +408,44 @@ fun HomeScreen(
                 verse = t.trustTimingVerse
             )
         }
+
+        // Vibecoding credits footer
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            VibecodedFooter()
+        }
+    }
+}
+
+@Composable
+fun VibecodedFooter() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Vibecoded using Manus, Claude and ChatGPT",
+            fontSize = 11.sp,
+            color = TextSubtle,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            ToolBadge(label = "M", background = Color(0xFF111111), foreground = Color.White)
+            ToolBadge(label = "C", background = Color(0xFFDA7756), foreground = Color.White)
+            ToolBadge(label = "G", background = Color(0xFF10A37F), foreground = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun ToolBadge(label: String, background: Color, foreground: Color) {
+    Box(
+        modifier = Modifier
+            .size(26.dp)
+            .background(background, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.Black, color = foreground)
     }
 }
 

@@ -3,6 +3,7 @@ package com.example.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -299,34 +300,183 @@ fun NamesOfAllahView(viewModel: AlHudaViewModel, onBack: () -> Unit) {
 fun HadithLibraryView(viewModel: AlHudaViewModel, onBack: () -> Unit) {
     val accentId by viewModel.settingsManager.accent.collectAsState()
     val accentColor = getAccentColor(accentId)
-    val hadiths = viewModel.eduRepo.hadiths
+    val selectedCollection by viewModel.hadithSelectedCollection.collectAsState()
+    val hadithList by viewModel.hadithList.collectAsState()
+    val isLoading by viewModel.isLoadingHadiths.collectAsState()
+    val loadFailed by viewModel.hadithLoadFailed.collectAsState()
+    val searchQuery by viewModel.hadithSearchQuery.collectAsState()
+    val hadithOfDay by viewModel.hadithOfTheDay.collectAsState()
+    val arabicById by viewModel.arabicByHadithId.collectAsState()
+    var expandedId by remember { mutableStateOf<Int?>(null) }
 
-    SubFeatureContainer(title = "Hadith Library", onBack = onBack) {
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 96.dp)
-        ) {
-            items(hadiths, key = { it.id }) { h ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = CardDefaults.cardColors(containerColor = GlassWhite05),
-                    border = BorderStroke(1.dp, BorderWhite10)
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Row(
+    LaunchedEffect(Unit) { viewModel.loadHadithOfTheDay() }
+
+    SubFeatureContainer(title = "Hadith Library", onBack = { if (selectedCollection != null) viewModel.clearHadithCollection() else onBack() }) {
+        if (selectedCollection == null) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(bottom = 96.dp)
+            ) {
+                item {
+                    Text(
+                        text = "Sourced from sunnah.com via the open hadith-api",
+                        fontSize = 10.sp,
+                        color = TextSubtle
+                    )
+                }
+                // Hadith of the Day — live from the API, cached once per day
+                item {
+                    if (hadithOfDay != null) {
+                        val h = hadithOfDay!!
+                        Card(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            shape = RoundedCornerShape(26.dp),
+                            colors = CardDefaults.cardColors(containerColor = accentColor.copy(alpha = 0.12f)),
+                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
                         ) {
-                            Text("${h.collection} • ${h.number}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accentColor)
-                            Text(h.grade, fontSize = 10.sp, color = Color(0xFF10B981), fontWeight = FontWeight.Bold)
+                            Column(modifier = Modifier.padding(18.dp)) {
+                                Text("✨ HADITH OF THE DAY", fontSize = 11.sp, fontWeight = FontWeight.Black, color = accentColor, letterSpacing = 1.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                if (h.arabicText.isNotBlank()) {
+                                    Text(h.arabicText, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                                Text(h.englishText, fontSize = 13.sp, color = Color(0xFFCBD5E1), lineHeight = 20.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("${h.collection} ${h.number}", fontSize = 11.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                            }
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Narrated by ${h.narrator}", fontSize = 11.sp, color = TextMuted, fontStyle = FontStyle.Italic)
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(h.arabicText, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(h.englishText, fontSize = 13.sp, color = Color(0xFFCBD5E1), lineHeight = 20.sp)
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(color = accentColor, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("Fetching Hadith of the Day…", fontSize = 12.sp, color = TextMuted)
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("BROWSE A COLLECTION", fontSize = 11.sp, fontWeight = FontWeight.Black, color = TextMuted, letterSpacing = 1.sp)
+                }
+
+                items(viewModel.hadithRepo.collections, key = { it.slug }) { c ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable { viewModel.loadHadithCollection(c.slug) },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = GlassWhite05),
+                        border = BorderStroke(1.dp, BorderWhite10)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(c.nameEn, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(c.nameAr, fontSize = 12.sp, color = TextMuted)
+                            }
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                }
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.onHadithSearchChanged(it) },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Search this collection or #number", color = TextMuted, fontSize = 13.sp) },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        focusedBorderColor = accentColor, unfocusedBorderColor = BorderWhite10
+                    )
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                when {
+                    isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = accentColor)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("Downloading this collection…", fontSize = 12.sp, color = TextMuted)
+                        }
+                    }
+                    loadFailed -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.WifiOff, contentDescription = null, tint = TextMuted, modifier = Modifier.size(32.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Couldn't load this collection. Check your connection.", fontSize = 12.sp, color = TextMuted, textAlign = TextAlign.Center)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            TextButton(onClick = { viewModel.loadHadithCollection(selectedCollection!!) }) {
+                                Text("Retry", color = accentColor, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    else -> {
+                        val filtered = viewModel.filteredHadiths
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            contentPadding = PaddingValues(bottom = 96.dp)
+                        ) {
+                            items(filtered, key = { it.id }) { h ->
+                                val isExpanded = expandedId == h.id
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        expandedId = if (isExpanded) null else h.id
+                                        if (!isExpanded) viewModel.fetchArabicForHadith(h.id)
+                                    },
+                                    shape = RoundedCornerShape(22.dp),
+                                    colors = CardDefaults.cardColors(containerColor = GlassWhite05),
+                                    border = BorderStroke(1.dp, BorderWhite10)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("${h.collection} • ${h.number}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accentColor)
+                                            if (h.grade.isNotBlank()) {
+                                                Text(h.grade, fontSize = 10.sp, color = Color(0xFF10B981), fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        if (h.chapter.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(h.chapter, fontSize = 11.sp, color = TextMuted, fontStyle = FontStyle.Italic)
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = h.englishText,
+                                            fontSize = 13.sp,
+                                            color = Color(0xFFCBD5E1),
+                                            lineHeight = 20.sp,
+                                            maxLines = if (isExpanded) Int.MAX_VALUE else 3
+                                        )
+                                        if (isExpanded) {
+                                            val arabic = arabicById[h.id]
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            if (arabic != null) {
+                                                Text(arabic, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                            } else {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    CircularProgressIndicator(color = accentColor, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("Loading Arabic text…", fontSize = 11.sp, color = TextMuted)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (filtered.isEmpty()) {
+                                item {
+                                    Text("No hadiths match \"$searchQuery\".", color = TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 20.dp))
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -846,6 +996,48 @@ fun PrayerTrackerView(viewModel: AlHudaViewModel, onBack: () -> Unit) {
                 }
             }
 
+            // Weekly streak — last 7 days at a glance
+            val weekHistory = remember(completed) { viewModel.settingsManager.getWeekHistory() }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = GlassWhite05),
+                border = BorderStroke(1.dp, BorderWhite10)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("THIS WEEK", fontSize = 11.sp, fontWeight = FontWeight.Black, color = TextMuted, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        weekHistory.forEach { (dayLabel, isToday, count) ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(
+                                            when {
+                                                count == 5 -> accentColor
+                                                count > 0 -> accentColor.copy(alpha = 0.3f)
+                                                else -> GlassWhite10
+                                            },
+                                            CircleShape
+                                        )
+                                        .then(if (isToday) Modifier.border(1.5.dp, Color.White, CircleShape) else Modifier),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (count == 5) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                    } else if (count > 0) {
+                                        Text(count.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(dayLabel, fontSize = 10.sp, color = TextMuted)
+                            }
+                        }
+                    }
+                }
+            }
+
             prayers.forEach { p ->
                 val isDone = completed.contains(p)
                 Card(
@@ -926,9 +1118,49 @@ fun HifzTrackerView(viewModel: AlHudaViewModel, onBack: () -> Unit) {
 fun NearbyMosquesView(viewModel: AlHudaViewModel, onBack: () -> Unit) {
     val accentId by viewModel.settingsManager.accent.collectAsState()
     val accentColor = getAccentColor(accentId)
-    val mosques = viewModel.eduRepo.nearbyMosques
+    val mosques by viewModel.nearbyMosques.collectAsState()
+    val isLoading by viewModel.isLoadingMosques.collectAsState()
+    val loadFailed by viewModel.mosqueLoadFailed.collectAsState()
+    val cityName by viewModel.settingsManager.city.collectAsState()
+
+    LaunchedEffect(Unit) { viewModel.loadNearbyMosques() }
 
     SubFeatureContainer(title = "Nearby Mosques", onBack = onBack) {
+        Text(
+            text = "Real mosques mapped on OpenStreetMap around $cityName",
+            fontSize = 12.sp,
+            color = TextMuted,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+        when {
+            isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = accentColor)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text("Searching nearby mosques…", fontSize = 12.sp, color = TextMuted)
+                }
+            }
+            loadFailed -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.WifiOff, contentDescription = null, tint = TextMuted, modifier = Modifier.size(32.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "No mosques found nearby — either none are mapped on OpenStreetMap yet, or there's no connection.",
+                        fontSize = 12.sp, color = TextMuted, textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TextButton(onClick = { viewModel.loadNearbyMosques(force = true) }) {
+                        Text("Retry", color = accentColor, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            else -> MosqueResultsList(mosques, accentColor)
+        }
+    }
+}
+
+@Composable
+private fun MosqueResultsList(mosques: List<com.example.model.MosqueItem>, accentColor: Color) {
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(bottom = 96.dp)
@@ -962,7 +1194,6 @@ fun NearbyMosquesView(viewModel: AlHudaViewModel, onBack: () -> Unit) {
                 }
             }
         }
-    }
 }
 
 // ----------------------------------------------------------------------------
@@ -1074,6 +1305,226 @@ fun FatwaFaqView(viewModel: AlHudaViewModel, onBack: () -> Unit) {
                         Text(f.answerSummary, fontSize = 13.sp, color = Color(0xFFCBD5E1), lineHeight = 20.sp)
                         Spacer(modifier = Modifier.height(6.dp))
                         Text("Source: ${f.reference}", fontSize = 10.sp, color = TextMuted)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// FEATURE: Daily Azkar (Morning & Evening Remembrance)
+// ----------------------------------------------------------------------------
+@Composable
+fun AzkarView(viewModel: AlHudaViewModel, onBack: () -> Unit) {
+    val accentId by viewModel.settingsManager.accent.collectAsState()
+    val accentColor = getAccentColor(accentId)
+    val completed by viewModel.settingsManager.azkarCompleted.collectAsState()
+    val allAzkar = viewModel.eduRepo.azkar
+
+    var section by remember { mutableStateOf("Morning") }
+    val sectionAzkar = remember(section) { allAzkar.filter { it.section == section } }
+    val sectionDone = sectionAzkar.count { completed.contains(it.id) }
+
+    SubFeatureContainer(title = "Daily Azkar", onBack = onBack) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            listOf("Morning" to "🌅 Morning", "Evening" to "🌙 Evening").forEach { (id, label) ->
+                val selected = section == id
+                FilterChip(
+                    selected = selected,
+                    onClick = { section = id },
+                    label = { Text(label, fontSize = 13.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = accentColor,
+                        selectedLabelColor = Color.Black,
+                        containerColor = GlassWhite05,
+                        labelColor = Color.White
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = selected,
+                        borderColor = BorderWhite10,
+                        selectedBorderColor = accentColor
+                    )
+                )
+            }
+        }
+
+        Text(
+            text = "$sectionDone of ${sectionAzkar.size} completed today",
+            fontSize = 12.sp,
+            color = TextMuted,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 96.dp)
+        ) {
+            items(sectionAzkar, key = { it.id }) { item ->
+                val isDone = completed.contains(item.id)
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { viewModel.settingsManager.toggleAzkar(item.id) },
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = if (isDone) Color(0xFF065F46).copy(alpha = 0.35f) else GlassWhite05),
+                    border = BorderStroke(1.dp, if (isDone) Color(0xFF10B981) else BorderWhite10)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .background(accentColor.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = if (item.repeat > 1) "×${item.repeat}" else "once",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = accentColor
+                                )
+                            }
+                            Checkbox(
+                                checked = isDone,
+                                onCheckedChange = { viewModel.settingsManager.toggleAzkar(item.id) },
+                                colors = CheckboxDefaults.colors(checkedColor = accentColor)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            item.arabic,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.End,
+                            lineHeight = 30.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(item.transliteration, fontSize = 11.sp, fontStyle = FontStyle.Italic, color = TextMuted)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(item.translation, fontSize = 13.sp, color = Color(0xFFCBD5E1), lineHeight = 19.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("Source: ${item.reference}", fontSize = 10.sp, color = TextMuted)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// FEATURE: Zakat Calculator
+// ----------------------------------------------------------------------------
+@Composable
+fun ZakatCalculatorView(viewModel: AlHudaViewModel, onBack: () -> Unit) {
+    val accentId by viewModel.settingsManager.accent.collectAsState()
+    val accentColor = getAccentColor(accentId)
+
+    var cash by remember { mutableStateOf("") }
+    var goldSilver by remember { mutableStateOf("") }
+    var investments by remember { mutableStateOf("") }
+    var businessAssets by remember { mutableStateOf("") }
+    var receivables by remember { mutableStateOf("") }
+    var debts by remember { mutableStateOf("") }
+    var nisab by remember { mutableStateOf("") }
+
+    fun num(s: String) = s.toDoubleOrNull() ?: 0.0
+
+    val totalWealth = num(cash) + num(goldSilver) + num(investments) + num(businessAssets) + num(receivables)
+    val netWealth = (totalWealth - num(debts)).coerceAtLeast(0.0)
+    val nisabValue = num(nisab)
+    val meetsNisab = nisabValue > 0 && netWealth >= nisabValue
+    val zakatDue = if (meetsNisab) netWealth * 0.025 else 0.0
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = GlassWhite05,
+        unfocusedContainerColor = GlassWhite05,
+        focusedBorderColor = accentColor.copy(alpha = 0.5f),
+        unfocusedBorderColor = BorderWhite10,
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White
+    )
+
+    @Composable
+    fun moneyField(label: String, value: String, onChange: (String) -> Unit) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { v -> onChange(v.filter { it.isDigit() || it == '.' }) },
+            label = { Text(label, color = TextMuted, fontSize = 13.sp) },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = fieldColors,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+
+    SubFeatureContainer(title = "Zakat Calculator", onBack = onBack) {
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 96.dp)
+        ) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = GlassWhite05),
+                    border = BorderStroke(1.dp, BorderWhite10)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text("ABOUT ZAKAT", fontSize = 11.sp, fontWeight = FontWeight.Black, color = accentColor)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "Zakat is 2.5% of your zakatable wealth held for one lunar year, once it reaches the Nisab threshold (≈ the value of 87.48g gold or 612.36g silver). Enter today's Nisab value in your currency — check the current gold/silver price to work it out.",
+                            fontSize = 12.sp,
+                            color = Color(0xFFCBD5E1),
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            }
+            item { moneyField("Nisab threshold (your currency)", nisab) { nisab = it } }
+            item { Text("ZAKATABLE ASSETS", fontSize = 11.sp, fontWeight = FontWeight.Black, color = accentColor) }
+            item { moneyField("Cash & bank savings", cash) { cash = it } }
+            item { moneyField("Gold & silver value", goldSilver) { goldSilver = it } }
+            item { moneyField("Investments & stocks", investments) { investments = it } }
+            item { moneyField("Business inventory", businessAssets) { businessAssets = it } }
+            item { moneyField("Money owed to you", receivables) { receivables = it } }
+            item { Text("LIABILITIES", fontSize = 11.sp, fontWeight = FontWeight.Black, color = accentColor) }
+            item { moneyField("Debts you currently owe", debts) { debts = it } }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(26.dp),
+                    colors = CardDefaults.cardColors(containerColor = accentColor.copy(alpha = 0.14f)),
+                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("NET ZAKATABLE WEALTH", fontSize = 11.sp, fontWeight = FontWeight.Black, color = TextMuted)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(String.format("%,.2f", netWealth), fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White)
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text("ZAKAT DUE (2.5%)", fontSize = 11.sp, fontWeight = FontWeight.Black, color = TextMuted)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(String.format("%,.2f", zakatDue), fontSize = 32.sp, fontWeight = FontWeight.Black, color = accentColor)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = when {
+                                nisabValue <= 0 -> "Enter the Nisab threshold above to calculate."
+                                meetsNisab -> "Your wealth meets the Nisab — Zakat is due."
+                                else -> "Your wealth is below the Nisab — no Zakat is due this year."
+                            },
+                            fontSize = 11.sp,
+                            color = TextMuted,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }

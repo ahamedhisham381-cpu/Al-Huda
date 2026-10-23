@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">Al-Huda</string>
+    <string name="widget_next_prayer_description">Shows the next prayer time and today\'s full prayer schedule.</string>
+    <string name="shortcut_qibla_short">Qibla</string>
+    <string name="shortcut_qibla_long">Qibla Compass</string>
+    <string name="shortcut_tasbih_short">Tasbih</string>
+    <string name="shortcut_tasbih_long">Tasbih Counter</string>
+    <string name="shortcut_prayer_short">Prayer Times</string>
+    <string name="shortcut_prayer_long">Today\'s Prayer Times</string>
 </resources>

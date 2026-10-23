@@ -1,7 +1,11 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.Context
+import android.os.Build
+import com.example.widget.WidgetUpdater
 import android.content.Intent
+import android.location.Location
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
@@ -10,6 +14,7 @@ import com.example.data.*
 import com.example.model.*
 import com.example.util.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,15 +27,19 @@ import java.util.Locale
 
 class AlHudaViewModel(application: Application) : AndroidViewModel(application) {
 
-    val prayerRepo = PrayerRepository()
+    val prayerRepo = PrayerRepository(application.getSharedPreferences("prayer_cache", Context.MODE_PRIVATE))
+    val geoRepo = GeoRepository(application)
     val quranRepo = QuranRepository()
     val spiritualRepo = SpiritualRepository()
     val eduRepo = EducationAndWorshipRepository()
+    val hadithRepo = com.example.data.HadithRepository(application)
+    val mosqueRepo = com.example.data.MosqueRepository()
     val settingsManager = SettingsManager(application)
     val audioHelper = AudioHelper(application)
     val qiblaHelper = QiblaHelper(application)
     val audioPlayer = AudioPlayerHelper()
     val azanAudio = AzanAudioHelper(application)
+    private val locationHelper = LocationHelper(application)
 
     // Splash screen state
     private val _showSplash = MutableStateFlow(true)
@@ -63,6 +72,16 @@ class AlHudaViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _citySearchQuery = MutableStateFlow("")
     val citySearchQuery: StateFlow<String> = _citySearchQuery.asStateFlow()
+
+    private val _citySuggestions = MutableStateFlow<List<GeoPlace>>(emptyList())
+    val citySuggestions: StateFlow<List<GeoPlace>> = _citySuggestions.asStateFlow()
+
+    private val _isLocating = MutableStateFlow(false)
+    val isLocating: StateFlow<Boolean> = _isLocating.asStateFlow()
+
+    private var citySearchJob: Job? = null
+    private var prayerJob: Job? = null
+    private var lastLoadedDay = -1
 
     // Quran State
     private val _selectedSurah = MutableStateFlow<Surah?>(null)
@@ -128,6 +147,11 @@ class AlHudaViewModel(application: Application) : AndroidViewModel(application) 
 
         loadPrayerTimes()
 
+        // If the saved location came from GPS, quietly refresh it (user may have travelled)
+        if (settingsManager.autoLocation.value && locationHelper.hasPermission()) {
+            autoLocate(silent = true)
+        }
+
         // Splash screen timeout
         viewModelScope.launch {
             delay(2200)
@@ -139,6 +163,8 @@ class AlHudaViewModel(application: Application) : AndroidViewModel(application) 
             while (true) {
                 delay(20000)
                 checkCurrentPrayerTimeAlert()
+                // New day: fetch fresh prayer times
+                if (Calendar.getInstance().get(Calendar.DAY_OF_YEAR) != lastLoadedDay) loadPrayerTimes()
             }
         }
     }
@@ -153,13 +179,29 @@ class AlHudaViewModel(application: Application) : AndroidViewModel(application) 
     fun loadPrayerTimes() {
         val lat = settingsManager.latitude.value
         val lng = settingsManager.longitude.value
+        val country = settingsManager.countryCode.value
+        val hanafi = settingsManager.madhab.value == "hanafi"
+        val methodOverride = settingsManager.calculationMethodOverride.value
+        val offsets = settingsManager.prayerOffsets.value
+        lastLoadedDay = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
 
-        val (calcTimes, calcHijri) = prayerRepo.calculateOfflinePrayerTimes(lat, lng)
+        // Instant local estimate so the screen is never empty
+        val (rawCalcTimes, calcHijri) = prayerRepo.calculateOfflinePrayerTimes(lat, lng, hanafi = hanafi)
+        val calcTimes = prayerRepo.applyOffsets(rawCalcTimes, offsets)
         _prayerTimes.value = calcTimes
         _hijriDate.value = calcHijri
         determineNextPrayer(calcTimes)
 
-        // Schedule exact alarms
+        // Keep the home-screen widget in sync
+        try {
+            WidgetUpdater.saveLatest(
+                getApplication(),
+                calcTimes,
+                WidgetUpdater.determineNextKey(calcTimes),
+                settingsManager.city.value,
+                "${calcHijri.day} ${if (settingsManager.lang.value == "ar") calcHijri.monthAr else calcHijri.monthEn}"
+            )
+        } catch (_: Exception) {}
         PrayerNotificationScheduler.scheduleAllPrayerAlerts(
             getApplication(),
             calcTimes,
@@ -167,18 +209,30 @@ class AlHudaViewModel(application: Application) : AndroidViewModel(application) 
             settingsManager.notificationsEnabled.value
         )
 
-        viewModelScope.launch {
-            val onlineResult = prayerRepo.getPrayerTimesOnline(lat, lng)
+        // Accurate times from the Aladhan API (cached monthly for offline use)
+        prayerJob?.cancel()
+        prayerJob = viewModelScope.launch {
+            val onlineResult = prayerRepo.getPrayerTimesOnline(lat, lng, country, hanafi, methodOverride)
             if (onlineResult != null) {
-                _prayerTimes.value = onlineResult.first
+                val adjustedTimes = prayerRepo.applyOffsets(onlineResult.first, offsets)
+                _prayerTimes.value = adjustedTimes
                 _hijriDate.value = onlineResult.second
-                determineNextPrayer(onlineResult.first)
+                determineNextPrayer(adjustedTimes)
                 _isOfflineMode.value = false
 
-                // Reschedule with refined online timings
+                try {
+                    WidgetUpdater.saveLatest(
+                        getApplication(),
+                        adjustedTimes,
+                        WidgetUpdater.determineNextKey(adjustedTimes),
+                        settingsManager.city.value,
+                        "${onlineResult.second.day} ${if (settingsManager.lang.value == "ar") onlineResult.second.monthAr else onlineResult.second.monthEn}"
+                    )
+                } catch (_: Exception) {}
+
                 PrayerNotificationScheduler.scheduleAllPrayerAlerts(
                     getApplication(),
-                    onlineResult.first,
+                    adjustedTimes,
                     settingsManager.city.value,
                     settingsManager.notificationsEnabled.value
                 )
@@ -216,12 +270,113 @@ class AlHudaViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onCitySearch(query: String) {
         _citySearchQuery.value = query
-        val found = prayerRepo.searchCity(query)
-        if (found != null) {
-            settingsManager.setLocation(found.name, found.latitude, found.longitude)
-            loadPrayerTimes()
-            _citySearchQuery.value = ""
-            audioHelper.playTick()
+        citySearchJob?.cancel()
+        val q = query.trim()
+        if (q.length < 2) {
+            _citySuggestions.value = emptyList()
+            return
+        }
+        citySearchJob = viewModelScope.launch {
+            delay(350) // debounce typing
+            var results = geoRepo.searchCities(q, settingsManager.lang.value)
+            if (results.isEmpty()) {
+                // Offline / no result: fall back to built-in cities
+                val lower = q.lowercase(Locale.ROOT)
+                results = prayerRepo.presetCities
+                    .filter { it.name.lowercase(Locale.ROOT).contains(lower) }
+                    .map { GeoPlace(it.name, it.latitude, it.longitude, it.countryCode) }
+            }
+            _citySuggestions.value = results
+        }
+    }
+
+    fun selectCity(place: GeoPlace) {
+        settingsManager.setLocation(place.name, place.latitude, place.longitude, place.countryCode, auto = false)
+        citySearchJob?.cancel()
+        _citySearchQuery.value = ""
+        _citySuggestions.value = emptyList()
+        loadPrayerTimes()
+        audioHelper.playTick()
+    }
+
+    /**
+     * Detects the user's location: device location first (Google fused / GPS),
+     * then an IP-based lookup if the device can't provide one. Needs no setup from the user.
+     */
+    fun autoLocate(silent: Boolean = false) {
+        if (_isLocating.value) return
+        viewModelScope.launch {
+            _isLocating.value = true
+            try {
+                val lang = settingsManager.lang.value
+                val isAr = lang == "ar"
+                fun say(ar: String, en: String, long: Boolean = false) {
+                    if (silent) return
+                    Toast.makeText(
+                        getApplication(),
+                        if (isAr) ar else en,
+                        if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                say("جاري تحديد موقعك…", "Finding your location…")
+
+                val gps = locationHelper.getCurrentLocation()
+                var lat: Double
+                var lng: Double
+                var ipPlace: GeoPlace? = null
+
+                if (gps != null) {
+                    lat = gps.latitude
+                    lng = gps.longitude
+                } else {
+                    // Silent refreshes never replace a precise saved location with an approximate one
+                    if (silent) return@launch
+                    ipPlace = geoRepo.ipLocate()
+                    if (ipPlace == null) {
+                        say(
+                            "تعذر تحديد الموقع. تأكد من الإنترنت وتشغيل خدمة الموقع، أو ابحث عن مدينتك.",
+                            "Couldn't detect your location. Check your internet and Location setting, or search your city.",
+                            long = true
+                        )
+                        return@launch
+                    }
+                    lat = ipPlace.latitude
+                    lng = ipPlace.longitude
+                }
+
+                // Silent refresh: ignore small movements (< 3 km)
+                if (silent) {
+                    val out = FloatArray(1)
+                    Location.distanceBetween(
+                        settingsManager.latitude.value, settingsManager.longitude.value, lat, lng, out
+                    )
+                    if (out[0] < 3000f) return@launch
+                }
+
+                val resolved = geoRepo.reverse(lat, lng, lang)
+                val name = resolved?.name?.ifBlank { null }
+                    ?: ipPlace?.name?.ifBlank { null }
+                    ?: (if (isAr) "موقعي الحالي" else "Current location")
+                val country = resolved?.countryCode?.ifBlank { null }
+                    ?: ipPlace?.countryCode?.ifBlank { null }
+                    ?: settingsManager.countryCode.value
+
+                settingsManager.setLocation(name, lat, lng, country, auto = gps != null)
+                loadPrayerTimes()
+
+                if (gps != null) {
+                    say("تم تحديث مواقيت الصلاة: $name", "Prayer times updated for $name")
+                } else {
+                    say(
+                        "تم استخدام موقع تقريبي: $name. فعّل GPS لموقع أدق.",
+                        "Using approximate location: $name. Turn on GPS and allow location for exact times.",
+                        long = true
+                    )
+                }
+            } finally {
+                _isLocating.value = false
+            }
         }
     }
 
@@ -311,6 +466,30 @@ class AlHudaViewModel(application: Application) : AndroidViewModel(application) 
         if (newCount == 33 || newCount == 99 || newCount == 100) {
             audioHelper.playChime()
         }
+
+        // Reaching the person's chosen goal: chime + a short buzz so it's felt, not just heard
+        if (newCount == settingsManager.tasbihGoal.value) {
+            audioHelper.playChime()
+            vibrateGoalReached()
+        }
+    }
+
+    private fun vibrateGoalReached() {
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val manager = getApplication<Application>().getSystemService(android.os.VibratorManager::class.java)
+                manager?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(android.os.VibrationEffect.createWaveform(longArrayOf(0, 80, 60, 80, 60, 150), -1))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(longArrayOf(0, 80, 60, 80, 60, 150), -1)
+            }
+        } catch (_: Exception) {}
     }
 
     fun resetDhikr() {
@@ -346,12 +525,34 @@ class AlHudaViewModel(application: Application) : AndroidViewModel(application) 
     fun selectSurah(surah: Surah) {
         audioHelper.playTick()
         _selectedSurah.value = surah
+        settingsManager.setLastRead(surah.number, surah.nameEn)
         _isLoadingAyahs.value = true
         viewModelScope.launch {
             val list = quranRepo.getAyahsForSurah(surah.number)
             _ayahs.value = list
             _isLoadingAyahs.value = false
         }
+    }
+
+    // "surah" or "juz" browsing mode on the Quran home screen
+    private val _quranBrowseMode = MutableStateFlow("surah")
+    val quranBrowseMode: StateFlow<String> = _quranBrowseMode.asStateFlow()
+    fun setQuranBrowseMode(mode: String) {
+        _quranBrowseMode.value = mode
+        audioHelper.playTick()
+    }
+
+    private val _showBookmarks = MutableStateFlow(false)
+    val showBookmarks: StateFlow<Boolean> = _showBookmarks.asStateFlow()
+    fun toggleShowBookmarks(show: Boolean) {
+        _showBookmarks.value = show
+        audioHelper.playTick()
+    }
+
+    fun toggleAyahBookmark(ayahNumber: Int) {
+        val surahNumber = _selectedSurah.value?.number ?: return
+        settingsManager.toggleBookmark(surahNumber, ayahNumber)
+        audioHelper.playTick()
     }
 
     fun clearSelectedSurah() {
@@ -394,6 +595,120 @@ class AlHudaViewModel(application: Application) : AndroidViewModel(application) 
         audioHelper.playTick()
         _quizSelectedOption.value = null
         _quizQuestionIndex.value = (_quizQuestionIndex.value + 1) % eduRepo.quizQuestions.size
+    }
+
+    // Hadith Library (live data from the fawazahmed0 Hadith API)
+    private val _hadithSelectedCollection = MutableStateFlow<String?>(null)
+    val hadithSelectedCollection: StateFlow<String?> = _hadithSelectedCollection.asStateFlow()
+
+    private val _hadithList = MutableStateFlow<List<com.example.model.HadithItem>>(emptyList())
+    val hadithList: StateFlow<List<com.example.model.HadithItem>> = _hadithList.asStateFlow()
+
+    private val _isLoadingHadiths = MutableStateFlow(false)
+    val isLoadingHadiths: StateFlow<Boolean> = _isLoadingHadiths.asStateFlow()
+
+    private val _hadithLoadFailed = MutableStateFlow(false)
+    val hadithLoadFailed: StateFlow<Boolean> = _hadithLoadFailed.asStateFlow()
+
+    private val _hadithSearchQuery = MutableStateFlow("")
+    val hadithSearchQuery: StateFlow<String> = _hadithSearchQuery.asStateFlow()
+
+    private val _hadithOfTheDay = MutableStateFlow<com.example.model.HadithItem?>(null)
+    val hadithOfTheDay: StateFlow<com.example.model.HadithItem?> = _hadithOfTheDay.asStateFlow()
+
+    private val _arabicByHadithId = MutableStateFlow<Map<Int, String>>(emptyMap())
+    val arabicByHadithId: StateFlow<Map<Int, String>> = _arabicByHadithId.asStateFlow()
+
+    private var hadithLoadJob: Job? = null
+
+    fun loadHadithCollection(slug: String) {
+        if (_hadithSelectedCollection.value == slug && _hadithList.value.isNotEmpty()) return
+        audioHelper.playTick()
+        _hadithSelectedCollection.value = slug
+        _hadithSearchQuery.value = ""
+        _hadithList.value = emptyList()
+        _hadithLoadFailed.value = false
+        hadithLoadJob?.cancel()
+        hadithLoadJob = viewModelScope.launch {
+            _isLoadingHadiths.value = true
+            val items = hadithRepo.getCollection(slug)
+            _hadithList.value = items
+            _hadithLoadFailed.value = items.isEmpty()
+            _isLoadingHadiths.value = false
+        }
+    }
+
+    fun clearHadithCollection() {
+        _hadithSelectedCollection.value = null
+        _hadithList.value = emptyList()
+        _hadithSearchQuery.value = ""
+    }
+
+    fun onHadithSearchChanged(query: String) {
+        _hadithSearchQuery.value = query
+    }
+
+    val filteredHadiths: List<com.example.model.HadithItem>
+        get() = hadithRepo.search(_hadithList.value, _hadithSearchQuery.value)
+
+    fun fetchArabicForHadith(hadithId: Int) {
+        val slug = _hadithSelectedCollection.value ?: return
+        if (_arabicByHadithId.value.containsKey(hadithId)) return
+        viewModelScope.launch {
+            val arabic = hadithRepo.getArabicText(slug, hadithId) ?: return@launch
+            _arabicByHadithId.value = _arabicByHadithId.value + (hadithId to arabic)
+        }
+    }
+
+    fun loadHadithOfTheDay(force: Boolean = false) {
+        if (_hadithOfTheDay.value != null && !force) return
+        viewModelScope.launch {
+            val cached = settingsManager.getCachedHadithOfDay()
+            if (cached != null && !force) {
+                _hadithOfTheDay.value = cached
+                return@launch
+            }
+            val fresh = hadithRepo.getRandomHadith() ?: return@launch
+            _hadithOfTheDay.value = fresh
+            settingsManager.setCachedHadithOfDay(fresh)
+        }
+    }
+
+    // Nearby Mosques (real OpenStreetMap/Overpass lookup around the saved location)
+    private val _nearbyMosques = MutableStateFlow<List<com.example.model.MosqueItem>>(emptyList())
+    val nearbyMosques: StateFlow<List<com.example.model.MosqueItem>> = _nearbyMosques.asStateFlow()
+
+    private val _isLoadingMosques = MutableStateFlow(false)
+    val isLoadingMosques: StateFlow<Boolean> = _isLoadingMosques.asStateFlow()
+
+    private val _mosqueLoadFailed = MutableStateFlow(false)
+    val mosqueLoadFailed: StateFlow<Boolean> = _mosqueLoadFailed.asStateFlow()
+
+    fun loadNearbyMosques(force: Boolean = false) {
+        if (_isLoadingMosques.value) return
+        if (_nearbyMosques.value.isNotEmpty() && !force) return
+        viewModelScope.launch {
+            _isLoadingMosques.value = true
+            _mosqueLoadFailed.value = false
+            val lat = settingsManager.latitude.value
+            val lng = settingsManager.longitude.value
+            val results = mosqueRepo.findNearby(lat, lng)
+            _nearbyMosques.value = results
+            _mosqueLoadFailed.value = results.isEmpty()
+            _isLoadingMosques.value = false
+        }
+    }
+
+    // Customization: changing any of these should immediately recompute prayer times
+    fun setCalculationMethod(methodId: Int?) {
+        settingsManager.setCalculationMethodOverride(methodId)
+        audioHelper.playTick()
+        loadPrayerTimes()
+    }
+
+    fun setPrayerOffset(prayerName: String, minutes: Int) {
+        settingsManager.setPrayerOffset(prayerName, minutes)
+        loadPrayerTimes()
     }
 
     fun setRamadanJuz(juz: Int) {

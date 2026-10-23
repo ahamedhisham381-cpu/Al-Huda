@@ -78,3 +78,23 @@ fun getThemePalette(id: String): ThemePalette {
 fun getAccentColor(id: String): Color {
     return AvailableAccents.firstOrNull { it.id == id }?.color ?: Emerald500
 }
+
+/** Quran reading page color schemes — WeMuslim-style "reading theme" presets. */
+data class QuranReadingColors(
+    val id: String,
+    val label: String,
+    val pageBackground: Color,
+    val cardBackground: Color,
+    val arabicText: Color,
+    val isLight: Boolean = false
+)
+
+val QuranReadingThemes = listOf(
+    QuranReadingColors("default", "Default", BgSlate950, Color(0x0DFFFFFF), Color.White),
+    QuranReadingColors("night", "Night", Color.Black, Color(0x0DFFFFFF), Color(0xFFE5E5E5)),
+    QuranReadingColors("green", "Classic Green", Color(0xFF07210F), Color(0x1A10B981), Color(0xFFECFDF5)),
+    QuranReadingColors("sepia", "Sepia", Color(0xFFF1E5C8), Color(0x33FFFFFF), Color(0xFF2A1B06), isLight = true)
+)
+
+fun getQuranReadingColors(id: String): QuranReadingColors =
+    QuranReadingThemes.firstOrNull { it.id == id } ?: QuranReadingThemes[0]

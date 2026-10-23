@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="shortcut_qibla"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_qibla"
+        android:shortcutShortLabel="@string/shortcut_qibla_short"
+        android:shortcutLongLabel="@string/shortcut_qibla_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aistudio.alhuda"
+            android:targetClass="com.example.MainActivity">
+            <extra android:name="shortcut_action" android:value="qibla" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shortcut_tasbih"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_tasbih"
+        android:shortcutShortLabel="@string/shortcut_tasbih_short"
+        android:shortcutLongLabel="@string/shortcut_tasbih_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aistudio.alhuda"
+            android:targetClass="com.example.MainActivity">
+            <extra android:name="shortcut_action" android:value="dhikr_tab" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shortcut_prayer_times"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_prayer"
+        android:shortcutShortLabel="@string/shortcut_prayer_short"
+        android:shortcutLongLabel="@string/shortcut_prayer_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aistudio.alhuda"
+            android:targetClass="com.example.MainActivity">
+            <extra android:name="shortcut_action" android:value="home_tab" />
+        </intent>
+    </shortcut>
+</shortcuts>

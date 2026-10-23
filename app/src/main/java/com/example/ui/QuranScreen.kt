@@ -40,13 +40,22 @@ fun QuranScreen(
     val accentId by viewModel.settingsManager.accent.collectAsState()
     val accentColor = getAccentColor(accentId)
     val t = Translations.get(lang)
+    val isAr = lang == "ar"
+    val quranThemeId by viewModel.settingsManager.quranReadingTheme.collectAsState()
+    val quranFontScale by viewModel.settingsManager.quranFontScale.collectAsState()
+    val readingColors = getQuranReadingColors(quranThemeId)
+    val showBookmarks by viewModel.showBookmarks.collectAsState()
+    val bookmarks by viewModel.settingsManager.bookmarkedAyahs.collectAsState()
 
-    if (selectedSurah != null) {
+    if (showBookmarks) {
+        BookmarksListView(viewModel = viewModel, lang = lang, accentColor = accentColor, onBack = { viewModel.toggleShowBookmarks(false) })
+    } else if (selectedSurah != null) {
         // Surah Reader View
         val surah = selectedSurah!!
         Column(
             modifier = modifier
                 .fillMaxSize()
+                .background(readingColors.pageBackground)
                 .padding(horizontal = 16.dp)
                 .testTag("surah_reader_view")
         ) {
@@ -101,16 +110,18 @@ fun QuranScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
+                    if (!isAr) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${surah.nameEn} • ${surah.englishTranslation}",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextMuted
+                        )
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "${surah.nameEn} • ${surah.englishTranslation}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextMuted
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${surah.revelationType} • ${surah.numberOfAyahs} ${t.ayahsCount}",
+                        text = "${if (isAr) (if (surah.revelationType == "Meccan") "مكية" else "مدنية") else surah.revelationType} • ${surah.numberOfAyahs} ${t.ayahsCount}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = accentColor
@@ -130,7 +141,7 @@ fun QuranScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Qari Reciter:",
+                                text = if (isAr) "القارئ:" else "Qari Reciter:",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextMuted
@@ -179,7 +190,7 @@ fun QuranScreen(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(if (isPlayingAudio) "Pause" else "Listen", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(if (isAr) (if (isPlayingAudio) "إيقاف" else "استماع") else (if (isPlayingAudio) "Pause" else "Listen"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
                         }
@@ -210,8 +221,8 @@ fun QuranScreen(
                                 .fillMaxWidth()
                                 .testTag("ayah_${ayah.numberInSurah}"),
                             shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = GlassWhite05),
-                            border = BorderStroke(1.dp, BorderWhite10)
+                            colors = CardDefaults.cardColors(containerColor = readingColors.cardBackground),
+                            border = BorderStroke(1.dp, if (readingColors.isLight) Color(0x1A000000) else BorderWhite10)
                         ) {
                             Column(
                                 modifier = Modifier.padding(18.dp)
@@ -221,32 +232,46 @@ fun QuranScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.Top
                                 ) {
-                                    // Ayah number badge
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .background(accentColor.copy(alpha = 0.15f), CircleShape)
-                                            .clip(CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = ayah.numberInSurah.toString(),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = accentColor
+                                    // Ayah number badge + bookmark toggle
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .background(accentColor.copy(alpha = 0.15f), CircleShape)
+                                                .clip(CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = ayah.numberInSurah.toString(),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = accentColor
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        val bookmarkKey = "${surah.number}:${ayah.numberInSurah}"
+                                        val isBookmarked = bookmarks.contains(bookmarkKey)
+                                        Icon(
+                                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                            contentDescription = null,
+                                            tint = if (isBookmarked) accentColor else TextSubtle,
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .clickable { viewModel.toggleAyahBookmark(ayah.numberInSurah) }
+                                                .testTag("bookmark_${ayah.numberInSurah}")
                                         )
                                     }
 
                                     // Arabic Ayah Text
                                     Text(
                                         text = ayah.textAr,
-                                        fontSize = 24.sp,
+                                        fontSize = (24 * quranFontScale).sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        color = readingColors.arabicText,
                                         textAlign = TextAlign.End,
-                                        lineHeight = 42.sp,
+                                        lineHeight = (42 * quranFontScale).sp,
                                         modifier = Modifier
-                                            .fillMaxWidth()
+                                            .weight(1f)
                                             .padding(start = 16.dp)
                                     )
                                 }
@@ -255,14 +280,16 @@ fun QuranScreen(
                                 Divider(color = BorderWhite10)
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                // English Translation
-                                Text(
-                                    text = ayah.textEn,
-                                    fontSize = 14.sp,
-                                    fontStyle = FontStyle.Italic,
-                                    color = Color(0xFFCBD5E1),
-                                    lineHeight = 22.sp
-                                )
+                                // English translation: only shown outside Arabic mode
+                                if (!isAr) {
+                                    Text(
+                                        text = ayah.textEn,
+                                        fontSize = 14.sp,
+                                        fontStyle = FontStyle.Italic,
+                                        color = if (readingColors.isLight) Color(0xFF4A3A14) else Color(0xFFCBD5E1),
+                                        lineHeight = 22.sp
+                                    )
+                                }
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -272,7 +299,7 @@ fun QuranScreen(
                                     horizontalArrangement = Arrangement.End
                                 ) {
                                     Text(
-                                        text = if (showTafsir) "▲ Hide Tafsir" else "📖 Scholarly Tafsir",
+                                        text = if (isAr) (if (showTafsir) "▲ إخفاء التفسير" else "📖 التفسير") else (if (showTafsir) "▲ Hide Tafsir" else "📖 Scholarly Tafsir"),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = accentColor,
@@ -292,10 +319,10 @@ fun QuranScreen(
                                             .padding(12.dp)
                                     ) {
                                         Column {
-                                            Text("TAFSIR IBN KATHIR (SUMMARY)", fontSize = 9.sp, fontWeight = FontWeight.Black, color = accentColor)
+                                            Text(if (isAr) "تفسير ابن كثير (ملخص)" else "TAFSIR IBN KATHIR (SUMMARY)", fontSize = 9.sp, fontWeight = FontWeight.Black, color = accentColor)
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
-                                                text = "This sacred verse emphasizes Tawhid (the Oneness of Allah), submitting all praise to Him, and relying wholly upon divine guidance in every sphere of life. Classical scholars note that contemplating this verse purifies the believer's intention.",
+                                                text = if (isAr) "تؤكد هذه الآية الكريمة على توحيد الله تعالى، والتسليم له بالحمد، والاعتماد الكامل على هدايته في كل شؤون الحياة. ويرى العلماء أن تدبّر الآية يُطهّر نيّة المؤمن." else "This sacred verse emphasizes Tawhid (the Oneness of Allah), submitting all praise to Him, and relying wholly upon divine guidance in every sphere of life. Classical scholars note that contemplating this verse purifies the believer's intention.",
                                                 fontSize = 12.sp,
                                                 color = TextMuted,
                                                 lineHeight = 18.sp
@@ -369,6 +396,97 @@ fun QuranScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val browseMode by viewModel.quranBrowseMode.collectAsState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(GlassWhite05)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf("surah" to (if (isAr) "السور" else "Surahs"), "juz" to (if (isAr) "الأجزاء" else "Juz / Para")).forEach { (mode, label) ->
+                    val selected = browseMode == mode
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selected) accentColor else Color.Transparent)
+                            .clickable { viewModel.setQuranBrowseMode(mode) }
+                            .padding(vertical = 10.dp)
+                            .testTag("quran_browse_$mode"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.Black else TextMuted)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            run {
+                val lastReadSurahNumber by viewModel.settingsManager.lastReadSurahNumber.collectAsState()
+                val lastReadSurahName by viewModel.settingsManager.lastReadSurahName.collectAsState()
+                if (lastReadSurahNumber != null || bookmarks.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (lastReadSurahNumber != null) {
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .clickable {
+                                        viewModel.quranRepo.surahs.firstOrNull { it.number == lastReadSurahNumber }
+                                            ?.let { viewModel.selectSurah(it) }
+                                    },
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = accentColor.copy(alpha = 0.14f)),
+                                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f))
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text(
+                                        text = if (isAr) "متابعة القراءة" else "Continue Reading",
+                                        fontSize = 10.sp, fontWeight = FontWeight.Bold, color = accentColor
+                                    )
+                                    Text(
+                                        text = lastReadSurahName,
+                                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                        if (bookmarks.isNotEmpty()) {
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .clickable { viewModel.toggleShowBookmarks(true) }
+                                    .testTag("quran_bookmarks_card"),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = GlassWhite05),
+                                border = BorderStroke(1.dp, BorderWhite10)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text(
+                                        text = if (isAr) "المرجعيات" else "Bookmarks",
+                                        fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted
+                                    )
+                                    Text(
+                                        text = "${bookmarks.size} " + (if (isAr) "آية محفوظة" else "saved ayahs"),
+                                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+
+            if (browseMode == "juz") {
+                JuzListView(viewModel = viewModel, isAr = isAr, accentColor = accentColor)
+            } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -406,13 +524,13 @@ fun QuranScreen(
 
                                 Column {
                                     Text(
-                                        text = surah.nameEn,
+                                        text = if (isAr) surah.nameAr else surah.nameEn,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
                                     )
                                     Text(
-                                        text = "${surah.revelationType} • ${surah.numberOfAyahs} ${t.ayahsCount}",
+                                        text = "${if (isAr) (if (surah.revelationType == "Meccan") "مكية" else "مدنية") else surah.revelationType} • ${surah.numberOfAyahs} ${t.ayahsCount}",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = TextMuted
@@ -420,15 +538,150 @@ fun QuranScreen(
                                 }
                             }
 
-                            // Arabic Name
-                            Text(
-                                text = surah.nameAr,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = accentColor
+                            // Arabic Name (already the title in Arabic mode)
+                            if (!isAr) {
+                                Text(
+                                    text = surah.nameAr,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = accentColor
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    }
+}
+
+@Composable
+private fun BookmarksListView(
+    viewModel: AlHudaViewModel,
+    lang: String,
+    accentColor: Color,
+    onBack: () -> Unit
+) {
+    val isAr = lang == "ar"
+    val bookmarks by viewModel.settingsManager.bookmarkedAyahs.collectAsState()
+    val entries = remember(bookmarks) {
+        bookmarks.mapNotNull { key ->
+            val parts = key.split(":")
+            val surahNum = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+            val ayahNum = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+            val surah = viewModel.quranRepo.surahs.firstOrNull { it.number == surahNum } ?: return@mapNotNull null
+            Triple(surah, ayahNum, key)
+        }.sortedWith(compareBy({ it.first.number }, { it.second }))
+    }
+
+    SubFeatureContainer(title = if (isAr) "المرجعيات" else "Bookmarks", onBack = onBack) {
+        if (entries.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = if (isAr) "لا توجد آيات محفوظة بعد" else "No bookmarked ayahs yet",
+                    color = TextMuted,
+                    fontSize = 13.sp
+                )
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 96.dp)
+            ) {
+                items(entries, key = { it.third }) { (surah, ayahNum, key) ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .clickable {
+                                viewModel.toggleShowBookmarks(false)
+                                viewModel.selectSurah(surah)
+                            },
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = GlassWhite05),
+                        border = BorderStroke(1.dp, BorderWhite10)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = if (isAr) surah.nameAr else surah.nameEn,
+                                    fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White
+                                )
+                                Text(
+                                    text = (if (isAr) "آية " else "Ayah ") + ayahNum,
+                                    fontSize = 11.sp, color = TextMuted
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clickable { viewModel.settingsManager.toggleBookmark(surah.number, ayahNum) }
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun JuzListView(viewModel: AlHudaViewModel, isAr: Boolean, accentColor: Color) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(bottom = 96.dp)
+    ) {
+        items(com.example.data.QuranJuzBoundaries, key = { it.juzNumber }) { juz ->
+            val startSurah = viewModel.quranRepo.surahs.firstOrNull { it.number == juz.startSurah }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable { startSurah?.let { viewModel.selectSurah(it) } }
+                    .testTag("juz_item_${juz.juzNumber}"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = GlassWhite05),
+                border = BorderStroke(1.dp, BorderWhite10)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(accentColor.copy(alpha = 0.15f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(juz.juzNumber.toString(), fontSize = 14.sp, fontWeight = FontWeight.Black, color = accentColor)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = (if (isAr) "الجزء " else "Juz ") + juz.juzNumber,
+                                fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White
+                            )
+                            Text(
+                                text = if (startSurah != null) {
+                                    (if (isAr) "يبدأ من " else "Starts at ") +
+                                        (if (isAr) startSurah.nameAr else startSurah.nameEn) + " ${juz.startAyah}"
+                                } else "",
+                                fontSize = 11.sp, color = TextMuted
+                            )
+                        }
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
                 }
             }
         }

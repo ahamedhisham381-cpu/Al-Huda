@@ -49,6 +49,8 @@ fun FeaturesHubScreen(
             HubFeatureItem("names99", "99 Names of Allah", "Asma ul Husna & meanings", Icons.Default.AutoAwesome, "Worship"),
             HubFeatureItem("duas", "Dua Collection", "Hisn al-Muslim supplications", Icons.Default.VolunteerActivism, "Worship"),
             HubFeatureItem("tracker", "5 Prayers Log", "Daily Salah tracker & streak", Icons.Default.CheckCircle, "Worship"),
+            HubFeatureItem("azkar", "Daily Azkar", "Morning & Evening remembrance", Icons.Default.WbTwilight, "Worship"),
+            HubFeatureItem("zakat", "Zakat Calculator", "Calculate your annual Zakat due", Icons.Default.Calculate, "Worship"),
             HubFeatureItem("deeds", "Good Deeds Log", "Daily Sunnah habits checklist", Icons.Default.Favorite, "Worship"),
             HubFeatureItem("ramadan", "Ramadan Tracker", "Fasting log & Juz progress", Icons.Default.NightsStay, "Worship"),
             HubFeatureItem("hajj", "Hajj & Umrah", "Step-by-step ritual guide", Icons.Default.Landscape, "Worship"),
@@ -85,7 +87,7 @@ fun FeaturesHubScreen(
             modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
         )
         Text(
-            text = "30 Comprehensive tools for worship, learning & community",
+            text = "32 Comprehensive tools for worship, learning & community",
             fontSize = 11.sp,
             color = TextMuted,
             modifier = Modifier.padding(bottom = 14.dp)

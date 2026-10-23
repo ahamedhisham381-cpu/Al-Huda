@@ -98,7 +98,16 @@ data class DhikrPhrase(
 data class CityLocation(
     val name: String,
     val latitude: Double,
-    val longitude: Double
+    val longitude: Double,
+    val countryCode: String = ""
+)
+
+/** A resolved place (search result, reverse-geocode result or IP lookup). */
+data class GeoPlace(
+    val name: String,
+    val latitude: Double,
+    val longitude: Double,
+    val countryCode: String = ""
 )
 
 data class DuaItem(
@@ -199,4 +208,14 @@ data class CommunityPost(
     val text: String,
     val likesCount: Int = 0,
     val timestamp: String
+)
+
+data class AzkarItem(
+    val id: String,
+    val section: String, // "Morning" or "Evening"
+    val arabic: String,
+    val transliteration: String,
+    val translation: String,
+    val repeat: Int,
+    val reference: String
 )

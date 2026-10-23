@@ -1,5 +1,8 @@
 package com.example
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -42,6 +45,30 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
+
+        // First launch: detect the real location automatically so prayer times aren't
+        // left on the default Makkah fallback. Falls back to an IP-based location if
+        // permission is denied (handled inside autoLocate()), so this always helps.
+        if (!viewModel.settingsManager.hasRequestedInitialLocation) {
+            viewModel.settingsManager.setHasRequestedInitialLocation()
+            val hasLocationPermission = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (hasLocationPermission) {
+                viewModel.autoLocate()
+            } else {
+                requestPermissions(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                    1002
+                )
+            }
+        }
+
+        handleShortcutIntent(intent)
         setContent {
             val currentTheme by viewModel.settingsManager.theme.collectAsState()
             val currentAccent by viewModel.settingsManager.accent.collectAsState()
@@ -62,6 +89,37 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1002) {
+            // Granted -> uses real GPS/network location. Denied -> autoLocate() falls back
+            // to an IP-based location automatically, so prayer times are still localized.
+            viewModel.autoLocate()
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShortcutIntent(intent)
+    }
+
+    /** Routes a tap on a static launcher shortcut (long-press app icon) to the right screen. */
+    private fun handleShortcutIntent(intent: android.content.Intent?) {
+        when (intent?.getStringExtra("shortcut_action")) {
+            "qibla" -> {
+                viewModel.setActiveTab("home")
+                viewModel.openSubFeature("qibla")
+            }
+            "dhikr_tab" -> viewModel.setActiveTab("dhikr")
+            "home_tab" -> viewModel.setActiveTab("home")
         }
     }
 }
@@ -178,6 +236,8 @@ fun MainAppScaffold(viewModel: AlHudaViewModel) {
                         "news" -> IslamicNewsView(viewModel = viewModel) { viewModel.closeSubFeature() }
                         "community" -> CommunityReflectionsView(viewModel = viewModel) { viewModel.closeSubFeature() }
                         "hifz" -> HifzTrackerView(viewModel = viewModel) { viewModel.closeSubFeature() }
+                        "azkar" -> AzkarView(viewModel = viewModel) { viewModel.closeSubFeature() }
+                        "zakat" -> ZakatCalculatorView(viewModel = viewModel) { viewModel.closeSubFeature() }
                         else -> HomeScreen(viewModel = viewModel)
                     }
                 } else {

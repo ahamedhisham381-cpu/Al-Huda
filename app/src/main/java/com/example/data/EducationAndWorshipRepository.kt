@@ -174,6 +174,100 @@ class EducationAndWorshipRepository {
         )
     )
 
+    // Daily Azkar — Morning & Evening remembrance (Hisn al-Muslim selections)
+    val azkar: List<AzkarItem> = listOf(
+        AzkarItem(
+            id = "m_ayat_kursi",
+            section = "Morning",
+            arabic = "اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ...",
+            transliteration = "Allahu la ilaha illa Huwal-Hayyul-Qayyum...",
+            translation = "Ayat al-Kursi — Allah, there is no deity except Him, the Ever-Living, the Sustainer of existence.",
+            repeat = 1,
+            reference = "Quran 2:255"
+        ),
+        AzkarItem(
+            id = "m_sayyid_istighfar",
+            section = "Morning",
+            arabic = "اللَّهُمَّ أَنْتَ رَبِّي لَا إِلَٰهَ إِلَّا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ...",
+            transliteration = "Allahumma Anta Rabbi la ilaha illa Anta, khalaqtani wa ana 'abduka...",
+            translation = "Sayyid al-Istighfar — the master supplication for seeking forgiveness, said once in the morning.",
+            repeat = 1,
+            reference = "Sahih al-Bukhari 6306"
+        ),
+        AzkarItem(
+            id = "m_asbahna",
+            section = "Morning",
+            arabic = "أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ",
+            transliteration = "Asbahna wa asbahal-mulku lillah, wal-hamdu lillah",
+            translation = "We have entered a new morning, and dominion belongs to Allah. All praise is for Allah.",
+            repeat = 1,
+            reference = "Sahih Muslim"
+        ),
+        AzkarItem(
+            id = "m_tasbih",
+            section = "Morning",
+            arabic = "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ",
+            transliteration = "Subhan Allahi wa bihamdih",
+            translation = "Glory be to Allah and praise Him — whoever says this 100 times, their sins are forgiven.",
+            repeat = 100,
+            reference = "Sahih al-Bukhari 6405"
+        ),
+        AzkarItem(
+            id = "m_salawat",
+            section = "Morning",
+            arabic = "اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى نَبِيِّنَا مُحَمَّدٍ",
+            transliteration = "Allahumma salli wa sallim 'ala nabiyyina Muhammad",
+            translation = "O Allah, send blessings and peace upon our Prophet Muhammad.",
+            repeat = 10,
+            reference = "Common Sunnah practice"
+        ),
+        AzkarItem(
+            id = "e_amsayna",
+            section = "Evening",
+            arabic = "أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ",
+            transliteration = "Amsayna wa amsal-mulku lillah, wal-hamdu lillah",
+            translation = "We have entered the evening, and dominion belongs to Allah. All praise is for Allah.",
+            repeat = 1,
+            reference = "Sahih Muslim"
+        ),
+        AzkarItem(
+            id = "e_three_quls",
+            section = "Evening",
+            arabic = "قُلْ هُوَ اللَّهُ أَحَدٌ... + قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ... + قُلْ أَعُوذُ بِرَبِّ النَّاسِ...",
+            transliteration = "Qul huwa Allahu ahad... / Qul a'udhu bi Rabbil-falaq... / Qul a'udhu bi Rabbin-nas...",
+            translation = "Surahs Al-Ikhlas, Al-Falaq and An-Nas — recited for protection evening and morning.",
+            repeat = 3,
+            reference = "Sunan Abi Dawud"
+        ),
+        AzkarItem(
+            id = "e_afwa",
+            section = "Evening",
+            arabic = "اللَّهُمَّ إِنِّي أَسْأَلُكَ الْعَفْوَ وَالْعَافِيَةَ فِي الدُّنْيَا وَالْآخِرَةِ",
+            transliteration = "Allahumma inni as'alukal-'afwa wal-'afiyata fid-dunya wal-akhirah",
+            translation = "O Allah, I ask You for pardon and well-being in this world and the Hereafter.",
+            repeat = 1,
+            reference = "Sunan Abi Dawud"
+        ),
+        AzkarItem(
+            id = "e_tasbih",
+            section = "Evening",
+            arabic = "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ",
+            transliteration = "Subhan Allahi wa bihamdih",
+            translation = "Glory be to Allah and praise Him — a phrase light on the tongue, heavy on the scale.",
+            repeat = 100,
+            reference = "Sahih al-Bukhari 6405"
+        ),
+        AzkarItem(
+            id = "e_istighfar",
+            section = "Evening",
+            arabic = "أَسْتَغْفِرُ اللَّهَ وَأَتُوبُ إِلَيْهِ",
+            transliteration = "Astaghfirullah wa atubu ilayh",
+            translation = "I seek the forgiveness of Allah and turn to Him in repentance.",
+            repeat = 100,
+            reference = "Sahih al-Bukhari 6307"
+        )
+    )
+
     // Dua Collection (Feature 17)
     val duas = listOf(
         DuaItem(

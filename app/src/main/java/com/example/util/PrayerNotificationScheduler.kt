@@ -98,6 +98,32 @@ object PrayerNotificationScheduler {
         }
     }
 
+    /** Re-fires a single prayer's full-screen alert [minutes] from now (used by Snooze). */
+    fun scheduleSnooze(context: Context, prayerName: String, cityName: String, minutes: Int) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val intent = Intent(context, PrayerNotificationReceiver::class.java).apply {
+            action = PrayerNotificationReceiver.ACTION_PRAYER_ALERT
+            putExtra(PrayerNotificationReceiver.EXTRA_PRAYER_NAME, prayerName)
+            putExtra(PrayerNotificationReceiver.EXTRA_CITY_NAME, cityName)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            "snooze_$prayerName".hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val triggerAt = System.currentTimeMillis() + minutes * 60_000L
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            }
+        } catch (_: SecurityException) {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        }
+    }
+
     fun cancelAllAlarms(context: Context, alarmManager: AlarmManager) {
         prayerKeys.forEach { name ->
             val intent = Intent(context, PrayerNotificationReceiver::class.java).apply {

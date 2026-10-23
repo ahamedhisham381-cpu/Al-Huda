@@ -32,6 +32,7 @@ fun DhikrScreen(
     modifier: Modifier = Modifier
 ) {
     val count by viewModel.dhikrCount.collectAsState()
+    val goal by viewModel.settingsManager.tasbihGoal.collectAsState()
     val phraseIndex by viewModel.dhikrPhraseIndex.collectAsState()
     val currentPhrase = viewModel.spiritualRepo.dhikrPhrases[phraseIndex]
     val lang by viewModel.settingsManager.lang.collectAsState()
@@ -145,6 +146,25 @@ fun DhikrScreen(
 
             Spacer(modifier = Modifier.height(42.dp))
 
+            // Goal selector
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(33, 99, 100).forEach { preset ->
+                    val selected = goal == preset
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selected) accentColor else GlassWhite10)
+                            .clickable { viewModel.settingsManager.setTasbihGoal(preset); viewModel.resetDhikr() }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                            .testTag("tasbih_goal_$preset"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(preset.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.Black else TextMuted)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Big Tap-to-count circle
             Box(
                 modifier = Modifier
@@ -181,6 +201,16 @@ fun DhikrScreen(
                     modifier = Modifier.size(210.dp)
                 ) {}
 
+                // Progress ring toward the chosen goal
+                val progress = (count.toFloat() / goal.toFloat()).coerceIn(0f, 1f)
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(222.dp).testTag("tasbih_progress_ring"),
+                    color = accentColor,
+                    trackColor = Color.Transparent,
+                    strokeWidth = 4.dp
+                )
+
                 // Count Number
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -192,6 +222,12 @@ fun DhikrScreen(
                         fontWeight = FontWeight.Black,
                         color = Color.White,
                         letterSpacing = (-2).sp
+                    )
+                    Text(
+                        text = "/ $goal",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextSubtle
                     )
                 }
             }
