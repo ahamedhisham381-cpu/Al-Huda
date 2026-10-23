@@ -1,0 +1,40 @@
+workflows:
+  android-debug-apk:
+    name: Android Debug APK
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      groups:
+        # Create this group in Codemagic UI (App settings > Environment variables)
+        # and add GEMINI_API_KEY and FIREBASE_APPCHECK_DEBUG_TOKEN to it.
+        - app_secrets
+      vars:
+        PACKAGE_NAME: "com.aistudio.alhuda"
+      java: 17
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+    scripts:
+      - name: Write .env file from Codemagic secrets
+        script: |
+          cat > app/.env <<EOF
+          GEMINI_API_KEY=$GEMINI_API_KEY
+          FIREBASE_APPCHECK_DEBUG_TOKEN=$FIREBASE_APPCHECK_DEBUG_TOKEN
+          EOF
+      - name: Set execute permission for gradlew
+        script: chmod +x ./gradlew
+      - name: Build debug APK
+        script: ./gradlew assembleDebug --stacktrace
+    artifacts:
+      - app/build/outputs/apk/debug/*.apk
+    publishing:
+      email:
+        recipients:
+          - ahamedhisham381@gmail.com
+        notify:
+          success: true
+          failure: true
